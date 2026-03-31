@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Twitter Archive Viewer</title>
+<style>
+  /* ── Reset & Base ─────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:           #000000;
+    --bg-hover:     #080808;
+    --bg-modal:     #16181c;
+    --border:       #2f3336;
+    --text:         #e7e9ea;
+    --text-muted:   #71767b;
+    --accent:       #1d9bf0;
+    --accent-hover: #1a8cd8;
+    --green:        #00ba7c;
+    --red:          #f4212e;
+    --orange:       #ff7700;
+    --sidebar-w:    275px;
+    --col-w:        600px;
+    --font:         -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  [data-theme="light"] {
+    --bg:         #ffffff;
+    --bg-hover:   #f7f9f9;
+    --bg-modal:   #f7f9f9;
+    --border:     #eff3f4;
+    --text:       #0f1419;
+    --text-muted: #536471;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+  }
+
+  /* ── Layout ───────────────────────────────────────────────── */
+  .layout {
+    display: flex;
+    width: 100%;
+    max-width: 990px;
+    gap: 0;
+  }
+
+  /* ── Main Feed ────────────────────────────────────────────── */
+  .main {
+    flex: 1;
+    max-width: var(--col-w);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    min-height: 100vh;
+  }
+
+  /* ── Header ───────────────────────────────────────────────── */
+  .profile-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(12px);
+    background: rgba(0,0,0,.75);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  [data-theme="light"] .profile-header { background: rgba(255,255,255,.85); }
+  .header-back {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .header-back:hover { background: rgba(255,255,255,.12); }
+  .header-info h2 { font-size: 20px; font-weight: 700; line-height: 1.2; }
+  .header-info span { font-size: 13px; color: var(--text-muted); }
+
+  /* ── Profile Banner ───────────────────────────────────────── */
+  .banner {
+    background: linear-gradient(135deg, #1d9bf0 0%, #0a66c2 100%);
+    height: 200px;
+    width: 100%;
+  }
+  .profile-meta {
+    padding: 12px 16px 0;
+    position: relative;
+  }
+  .avatar-wrap {
+    position: absolute;
+    top: -67px;
+    width: 133px; height: 133px;
+    border-radius: 50%;
+    border: 4px solid var(--bg);
+    overflow: hidden;
+    background: #333;
+  }
+  .avatar-wrap img { width: 100%; height: 100%; object-fit: cover; }
+  .avatar-placeholder {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 48px; color: var(--text-muted);
+  }
+  .profile-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+  .btn-follow {
+    padding: 7px 16px;
+    border-radius: 9999px;
+    background: var(--text);
+    color: var(--bg);
+    font-size: 15px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  .btn-follow:hover { opacity: .85; }
+  .profile-name { font-size: 20px; font-weight: 700; margin-top: 60px; }
+  .profile-handle { color: var(--text-muted); font-size: 15px; margin-top: 2px; }
+  .profile-stats {
+    display: flex;
+    gap: 20px;
+    margin-top: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .stat span:first-child { font-weight: 700; }
+  .stat span:last-child { color: var(--text-muted); font-size: 14px; margin-left: 4px; }
+
+  /* ── Tab Bar ──────────────────────────────────────────────── */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 53px;
+    background: var(--bg);
+    z-index: 9;
+  }
+  .tab {
+    flex: 1;
+    padding: 16px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    position: relative;
+    transition: background .15s;
+  }
+  .tab:hover { background: rgba(255,255,255,.05); }
+  .tab.active { color: var(--text); font-weight: 700; }
+  .tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 56px; height: 4px;
+    background: var(--accent);
+    border-radius: 9999px;
+  }
+
+  /* ── Search / Filter ─────────────────────────────────────── */
+  .search-bar {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .search-wrap {
+    flex: 1;
+    background: rgba(255,255,255,.07);
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border: 1px solid transparent;
+    transition: border-color .15s, background .15s;
+  }
+  [data-theme="light"] .search-wrap { background: rgba(0,0,0,.04); }
+  .search-wrap:focus-within { border-color: var(--accent); background: transparent; }
+  .search-wrap svg { color: var(--text-muted); flex-shrink: 0; }
+  .search-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-size: 15px;
+    font-family: var(--font);
+    width: 100%;
+  }
+  .search-input::placeholder { color: var(--text-muted); }
+
+  /* ── Tweet Card ───────────────────────────────────────────── */
+  .tweet {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background .12s;
+    position: relative;
+  }
+  .tweet-row {
+    display: flex;
+    gap: 12px;
+  }
+  .tweet:hover { background: var(--bg-hover); }
+  .tweet.pinned::before {
+    content: '📌 Pinned';
+    position: absolute;
+    top: 8px; left: 60px;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .tweet.pinned { padding-top: 26px; }
+  .tweet-avatar {
+    flex-shrink: 0;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #333;
+  }
+  .tweet-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .tweet-avatar-ph { width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:18px;color:#888; }
+  .tweet-body { flex: 1; min-width: 0; }
+  .tweet-header {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+  .tweet-name { font-weight: 700; font-size: 15px; }
+  .tweet-handle, .tweet-time {
+    color: var(--text-muted);
+    font-size: 15px;
+  }
+  .tweet-dot { color: var(--text-muted); }
+  .tweet-text {
+    font-size: 15px;
+    line-height: 1.55;
+    word-break: break-word;
+    white-space: pre-wrap;
+    margin-bottom: 10px;
+  }
+  .tweet-text a { color: var(--accent); text-decoration: none; }
+  .tweet-text a:hover { text-decoration: underline; }
+
+  /* ── Media Grid ───────────────────────────────────────────── */
+  .media-grid {
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 10px;
+    display: grid;
+    gap: 2px;
+  }
+  .media-grid.count-1 { grid-template-columns: 1fr; }
+  .media-grid.count-2 { grid-template-columns: 1fr 1fr; }
+  .media-grid.count-3 { grid-template-columns: 1fr 1fr; }
+  .media-grid.count-3 .media-item:first-child { grid-row: span 2; }
+  .media-grid.count-4 { grid-template-columns: 1fr 1fr; }
+  .media-item { overflow: hidden; position: relative; background: #111; }
+  .count-1 .media-item { max-height: 500px; }
+  .count-2 .media-item, .count-3 .media-item, .count-4 .media-item { aspect-ratio: 1; }
+  .media-item img, .media-item video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: opacity .2s;
+  }
+  .media-item video { cursor: pointer; }
+  .media-overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .2s;
+    background: rgba(0,0,0,.3);
+    pointer-events: none;
+  }
+  .media-item:hover .media-overlay { opacity: 1; }
+
+  /* ── Reply Thread ────────────────────────────────────────── */
+  .reply-parent {
+    display: flex;
+    gap: 12px;
+    padding: 4px 0 0;
+  }
+  .reply-parent-avatarcol {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    width: 40px;
+  }
+  .reply-parent-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #333;
+    flex-shrink: 0;
+  }
+  .reply-parent-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .thread-line {
+    width: 2px;
+    flex: 1;
+    min-height: 12px;
+    background: var(--border);
+    border-radius: 1px;
+    margin: 4px 0 0;
+  }
+  .reply-parent-body {
+    flex: 1;
+    min-width: 0;
+    padding-bottom: 8px;
+    opacity: 0.75;
+  }
+  .reply-parent-body .tweet-text {
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+  .reply-parent-body .media-grid {
+    border-radius: 10px;
+    margin-bottom: 4px;
+  }
+  .reply-to-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    padding: 2px 0 8px;
+    padding-left: 52px;
+  }
+  .reply-to-label a { color: var(--accent); text-decoration: none; }
+  .reply-to-label a:hover { text-decoration: underline; }
+
+  /* ── Retweet Label ────────────────────────────────────────── */
+  .tweet-retweet-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    padding-left: 52px;
+  }
+  .tweet-retweet-label svg { flex-shrink: 0; }
+
+  /* ── Actions ──────────────────────────────────────────────── */
+  .tweet-actions {
+    display: flex;
+    gap: 0;
+    margin-top: 4px;
+    max-width: 420px;
+  }
+  .action {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    font-size: 13px;
+    color: var(--text-muted);
+    padding: 4px 0;
+    border-radius: 9999px;
+    cursor: default;
+    transition: color .15s;
+  }
+  .action svg { width: 18px; height: 18px; }
+  .action.reply:hover  { color: var(--accent); }
+  .action.reply:hover  .action-icon { background: rgba(29,155,240,.1); }
+  .action.retweet:hover { color: var(--green); }
+  .action.retweet:hover .action-icon { background: rgba(0,186,124,.1); }
+  .action.like:hover   { color: var(--red); }
+  .action.like:hover   .action-icon { background: rgba(244,33,46,.1); }
+  .action.views:hover  { color: var(--accent); }
+  .action-icon {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s;
+  }
+
+  /* ── Lightbox ─────────────────────────────────────────────── */
+  .lightbox {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.92);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox-close {
+    position: absolute; top: 16px; left: 16px;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.1);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 20px; color: #fff;
+    z-index: 2;
+  }
+  .lightbox img, .lightbox video {
+    max-width: 90vw; max-height: 90vh;
+    border-radius: 4px;
+    object-fit: contain;
+  }
+
+  /* ── Right Sidebar ────────────────────────────────────────── */
+  .sidebar-right {
+    width: 350px;
+    flex-shrink: 0;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .sidebar-widget {
+    background: rgba(255,255,255,.04);
+    border-radius: 16px;
+    padding: 16px;
+  }
+  [data-theme="light"] .sidebar-widget { background: #f7f9f9; }
+  .sidebar-widget h3 { font-size: 20px; font-weight: 800; margin-bottom: 12px; }
+  .info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .info-row:last-child { border: none; }
+  .info-row span:first-child { color: var(--text-muted); font-size: 14px; }
+  .info-row span:last-child  { font-weight: 600; font-size: 14px; }
+
+  /* ── Empty / Spinner ──────────────────────────────────────── */
+  .empty { text-align: center; padding: 60px 24px; color: var(--text-muted); }
+  .empty h3 { font-size: 24px; color: var(--text); margin-bottom: 8px; }
+  .empty p { font-size: 15px; }
+  .spinner { display: flex; align-items: center; justify-content: center; padding: 40px; }
+  .spinner svg { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Theme toggle ─────────────────────────────────────────── */
+  .theme-btn {
+    margin-left: auto;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: background .15s;
+    flex-shrink: 0;
+  }
+  .theme-btn:hover { background: rgba(255,255,255,.12); }
+  [data-theme="light"] .theme-btn:hover { background: rgba(0,0,0,.07); }
+
+  /* ── Responsive ───────────────────────────────────────────── */
+  @media (max-width: 800px) { .sidebar-right { display: none; } }
+  @media (max-width: 500px) { .main { border: none; } }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Main Column -->
+  <main class="main">
+    <div class="profile-header">
+      <div class="header-back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M7.414 13l5.043 5.04-1.414 1.42L3.586 12l7.457-7.46 1.414 1.42L7.414 11H21v2H7.414z"/></svg>
+      </div>
+      <div class="header-info">
+        <h2 id="hdr-name">Loading...</h2>
+        <span id="hdr-count">0 posts</span>
+      </div>
+      <div class="theme-btn" onclick="toggleTheme()" title="Toggle theme">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </div>
+    </div>
+
+    <div class="banner" id="profile-banner"></div>
+
+    <div class="profile-meta">
+      <div class="avatar-wrap" id="profile-avatar-wrap">
+        <div class="avatar-placeholder">👤</div>
+      </div>
+      <div class="profile-actions">
+      </div>
+      <div class="profile-name" id="profile-name">—</div>
+      <div class="profile-handle" id="profile-handle">@—</div>
+      <div class="profile-stats">
+        <div class="stat"><span id="stat-tweets">0</span><span>Posts</span></div>
+        <div class="stat"><span id="stat-likes">0</span><span>Likes</span></div>
+        <div class="stat"><span id="stat-media">0</span><span>Media</span></div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="filterTab('all', this)">Posts</div>
+      <div class="tab" onclick="filterTab('media', this)">Media</div>
+      <div class="tab" onclick="filterTab('replies', this)">Replies</div>
+    </div>
+
+    <div class="search-bar">
+      <div class="search-wrap">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input class="search-input" id="search" placeholder="Search tweets…" oninput="filterSearch(this.value)">
+      </div>
+    </div>
+
+    <div id="feed">
+      <div class="spinner">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><circle cx="12" cy="12" r="10" stroke-opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+      </div>
+    </div>
+  </main>
+
+  <!-- Right Sidebar -->
+  <aside class="sidebar-right">
+    <div class="sidebar-widget">
+      <h3>Archive Info</h3>
+      <div id="archive-info">
+        <div class="info-row"><span>Status</span><span>Loading…</span></div>
+      </div>
+    </div>
+    <div class="sidebar-widget">
+      <h3>Quick Stats</h3>
+      <div id="quick-stats">
+        <div class="info-row"><span>Total likes</span><span id="qs-likes">—</span></div>
+        <div class="info-row"><span>Total RTs</span><span id="qs-rts">—</span></div>
+        <div class="info-row"><span>Media files</span><span id="qs-media">—</span></div>
+        <div class="info-row"><span>With replies</span><span id="qs-replies">—</span></div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+  <div class="lightbox-close" onclick="closeLightbox()">✕</div>
+  <div id="lightbox-content"></div>
+</div>
+
+<script>
+// ── Helpers ────────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+// ── State ──────────────────────────────────────────────────────────────────
+let allTweets  = [];
+let activeTab  = 'all';
+let searchQuery = '';
+
+// ── Load Archive ───────────────────────────────────────────────────────────
+async function loadArchive() {
+  // Check for data embedded by archiver (works with file:// protocol)
+  let data = (typeof ARCHIVE_DATA !== 'undefined' && ARCHIVE_DATA) ? ARCHIVE_DATA : null;
+
+  if (!data) {
+    // Fallback: try loading archive.json via HTTP (when served)
+    const paths = ['./archive.json', '../archive.json'];
+    for (const p of paths) {
+      try {
+        const r = await fetch(p);
+        if (r.ok) { data = await r.json(); break; }
+      } catch(e) {}
+    }
+  }
+
+  if (!data) {
+    renderDemo();
+    return;
+  }
+
+  const { profile, tweets } = data;
+  allTweets = tweets || [];
+
+  // Profile header
+  document.getElementById('hdr-name').textContent    = profile.username || '@unknown';
+  document.getElementById('hdr-count').textContent   = `${allTweets.length} posts`;
+  document.getElementById('profile-name').textContent  = profile.username || '';
+  document.getElementById('profile-handle').textContent = `@${profile.handle || ''}`;
+  const _ownH = (profile.handle || '').toLowerCase();
+  const _own  = allTweets.filter(t => (t.handle||'').toLowerCase() === _ownH);
+  document.getElementById('stat-tweets').textContent = _own.length.toLocaleString();
+  document.getElementById('stat-likes').textContent  = _own.reduce((s,t)=>s+(t.likes||0),0).toLocaleString();
+  document.getElementById('stat-media').textContent  = _own.filter(t=>t.media?.length).length.toLocaleString();
+  document.title = `@${profile.handle} — Archive`;
+
+  if (profile.avatar) {
+    document.getElementById('profile-avatar-wrap').innerHTML =
+      `<img src="${escapeHtml(profile.avatar)}" onerror="this.parentNode.innerHTML='<div class=avatar-placeholder>👤</div>'">`;
+  }
+
+  // Sidebar
+  document.getElementById('archive-info').innerHTML = `
+    <div class="info-row"><span>Account</span><span>@${escapeHtml(profile.handle)}</span></div>
+    <div class="info-row"><span>Archived</span><span>${profile.archived_at ? new Date(profile.archived_at).toLocaleDateString() : '—'}</span></div>
+    <div class="info-row"><span>Tweets</span><span>${allTweets.length.toLocaleString()}</span></div>
+  `;
+  const ownHandle = (profile.handle || '').toLowerCase();
+  const ownTweets = allTweets.filter(t => (t.handle||'').toLowerCase() === ownHandle);
+  document.getElementById('qs-likes').textContent   = ownTweets.reduce((s,t)=>s+(t.likes||0),0).toLocaleString();
+  document.getElementById('qs-rts').textContent     = ownTweets.reduce((s,t)=>s+(t.retweets||0),0).toLocaleString();
+  document.getElementById('qs-media').textContent   = ownTweets.reduce((s,t)=>s+(t.media?.length||0),0).toLocaleString();
+  document.getElementById('qs-replies').textContent = ownTweets.filter(t=>t.is_reply).length.toLocaleString();
+
+  renderFeed();
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function getFiltered() {
+  let tweets = [...allTweets];
+  if (activeTab === 'media')   tweets = tweets.filter(t => t.media?.length > 0);
+  if (activeTab === 'replies') tweets = tweets.filter(t => t.is_reply);
+  if (activeTab === 'all')     tweets = tweets.filter(t => !t.is_reply);
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    tweets = tweets.filter(t => (t.text||'').toLowerCase().includes(q));
+  }
+  return tweets;
+}
+
+function renderFeed() {
+  const tweets = getFiltered();
+  const feed   = document.getElementById('feed');
+  if (!tweets.length) {
+    feed.innerHTML = `<div class="empty"><h3>No tweets found</h3><p>Try a different filter or search query.</p></div>`;
+    return;
+  }
+  feed.innerHTML = tweets.map(renderTweet).join('');
+}
+
+function fmtNum(n) {
+  if (!n) return '0';
+  if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1)+'K';
+  return String(n);
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  try {
+    const dt  = new Date(d);
+    const now = new Date();
+    const diff = (now - dt) / 1000;
+    if (diff < 60)      return `${Math.floor(diff)}s`;
+    if (diff < 3600)    return `${Math.floor(diff/60)}m`;
+    if (diff < 86400)   return `${Math.floor(diff/3600)}h`;
+    if (diff < 7*86400) return `${Math.floor(diff/86400)}d`;
+    return dt.toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric',
+      year: dt.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+    });
+  } catch(e) { return String(d).slice(0,10); }
+}
+
+function linkify(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
+    .replace(/@(\w+)/g, '<a href="#">@$1</a>')
+    .replace(/#(\w+)/g, '<a href="#">#$1</a>');
+}
+
+function renderMedia(media, tweetId) {
+  if (!media?.length) return '';
+  const count = Math.min(media.length, 4);
+  const items = media.slice(0, 4).map(m => {
+    const src = escapeHtml(m.local);
+    if (m.type === 'video') {
+      return `<div class="media-item">
+        <video src="${src}" onclick="openLightbox('${src}','video',event)" muted playsinline preload="metadata"></video>
+        <div class="media-overlay">▶</div>
+      </div>`;
+    }
+    return `<div class="media-item">
+      <img src="${src}" loading="lazy" onerror="this.style.display='none'" onclick="openLightbox('${src}','image',event)">
+      <div class="media-overlay">🔍</div>
+    </div>`;
+  }).join('');
+  return `<div class="media-grid count-${count}">${items}</div>`;
+}
+
+function renderReplyContext(t) {
+  if (!t.is_reply) return '';
+
+  // Full parent tweet with avatar + connecting thread line
+  if (t.parent_tweet) {
+    const p = t.parent_tweet;
+    const pAvatar = p.avatar
+      ? `<img src="${escapeHtml(p.avatar)}" onerror="this.parentNode.innerHTML='<div class=tweet-avatar-ph style=font-size:14px>👤</div>'">`
+      : '<div class="tweet-avatar-ph" style="font-size:14px">👤</div>';
+    const pMedia = p.media?.length ? renderMedia(p.media, p.id) : '';
+    return `<div class="reply-parent">
+      <div class="reply-parent-avatarcol">
+        <div class="reply-parent-avatar">${pAvatar}</div>
+        <div class="thread-line"></div>
+      </div>
+      <div class="reply-parent-body">
+        <div class="tweet-header">
+          <span class="tweet-name">${escapeHtml(p.username)}</span>
+          <span class="tweet-handle">@${escapeHtml(p.handle)}</span>
+        </div>
+        ${p.text ? `<div class="tweet-text">${linkify(p.text)}</div>` : ''}
+        ${pMedia}
+      </div>
+    </div>`;
+  }
+
+  // Fallback: "Replying to @handle" label
+  if (t.reply_to_handles?.length) {
+    const handles = t.reply_to_handles.map(h => `<a href="#">@${h}</a>`).join(' ');
+    return `<div class="reply-to-label">Replying to ${handles}</div>`;
+  }
+
+  return '';
+}
+
+function renderQuotedTweet(t) {
+  if (!t.quoted_tweet) return '';
+  const qt = t.quoted_tweet;
+  
+  const qtAvatar = qt.avatar
+    ? `<img src="${escapeHtml(qt.avatar)}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.outerHTML='<div class=tweet-avatar-ph style=\\'width:20px;height:20px;font-size:12px\\'>👤</div>'">`
+    : '<div class="tweet-avatar-ph" style="width:20px;height:20px;font-size:12px">👤</div>';
+
+  const qtMedia = qt.media?.length ? renderMedia(qt.media, qt.id) : '';
+
+  return `<div class="quoted-tweet" style="margin-top: 10px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 12px; padding: 12px; cursor: pointer; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='transparent'">
+    <div class="tweet-header" style="margin-bottom: 6px;">
+      <div style="width: 20px; height: 20px; border-radius: 50%; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; background: #333;">${qtAvatar}</div>
+      <span class="tweet-name" style="font-size: 14px; font-weight: 700;">${escapeHtml(qt.username)}</span>
+      <span class="tweet-handle" style="font-size: 14px; color: var(--text-muted);">@${escapeHtml(qt.handle)}</span>
+      <span class="tweet-dot" style="font-size: 14px; color: var(--text-muted);">·</span>
+      <span class="tweet-time" style="font-size: 14px; color: var(--text-muted);">${fmtDate(qt.date)}</span>
+    </div>
+    ${qt.text ? `<div class="tweet-text" style="font-size: 14px; margin-bottom: 8px;">${linkify(qt.text)}</div>` : ''}
+    ${qtMedia}
+  </div>`;
+}
+
+function renderTweet(t) {
+  const avatar = t.avatar
+    ? `<img src="${escapeHtml(t.avatar)}" onerror="this.outerHTML='<div class=tweet-avatar-ph>👤</div>'">`
+    : '<div class="tweet-avatar-ph">👤</div>';
+
+  const retweetLabel = t.is_retweet
+    ? `<div class="tweet-retweet-label">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        ${t.retweeted_by ? `${escapeHtml(t.retweeted_by)} Retweeted` : 'Retweeted'}
+      </div>`
+    : '';
+
+  return `<div class="tweet${t.is_pinned?' pinned':''}">
+    ${retweetLabel}
+    ${renderReplyContext(t)}
+    <div class="tweet-row">
+    <div class="tweet-avatar">${avatar}</div>
+    <div class="tweet-body">
+      <div class="tweet-header">
+        <span class="tweet-name">${escapeHtml(t.username)}</span>
+        <span class="tweet-handle">@${escapeHtml(t.handle)}</span>
+        <span class="tweet-dot">·</span>
+        <span class="tweet-time">${fmtDate(t.date)}</span>
+      </div>
+      <div class="tweet-text">${linkify(t.text)}</div>
+      ${renderMedia(t.media, t.id)}
+      ${renderQuotedTweet(t)}
+      <div class="tweet-actions">
+        <div class="action reply">
+          <div class="action-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          ${fmtNum(t.replies)}
+        </div>
+        <div class="action retweet">
+          <div class="action-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          </div>
+          ${fmtNum(t.retweets)}
+        </div>
+        <div class="action like">
+          <div class="action-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </div>
+          ${fmtNum(t.likes)}
+        </div>
+        <div class="action views">
+          <div class="action-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+          ${fmtNum(t.views)}
+        </div>
+      </div>
+    </div>
+    </div>
+  </div>`;
+}
+
+// ── Demo Mode ──────────────────────────────────────────────────────────────
+function renderDemo() {
+  const DEMO = {
+    profile: { username: 'demo', handle: 'Demo Account',
+               archived_at: new Date().toISOString(), tweet_count: 3 },
+    tweets: [
+      { id:'1', username:'demo', handle:'Demo Account',
+        text:"Welcome to the Twitter Archive Viewer!\n\nNo archive data found. To create one:\n\n  python archiver.py <username>\n  python archiver.py <username> --cookies cookies.txt\n\nOr use the GUI:\n\n  python gui.py",
+        date: new Date().toISOString(), likes:0, retweets:0, replies:0, views:0,
+        is_pinned:true, is_reply:false, is_retweet:false, retweeted_by:'',
+        reply_to_handles:[], parent_tweet:null, media:[] },
+      { id:'2', username:'demo', handle:'Demo Account',
+        text:"How to get cookies.txt:\n\n1. Log into x.com in Chrome or Firefox\n2. Install 'Get cookies.txt LOCALLY' extension\n3. Click the extension on x.com → Export\n4. Pass the file with --cookies cookies.txt",
+        date: new Date(Date.now()-3600000).toISOString(), likes:0, retweets:0, replies:0, views:0,
+        is_pinned:false, is_reply:false, is_retweet:false, retweeted_by:'',
+        reply_to_handles:[], parent_tweet:null, media:[] },
+      { id:'3', username:'demo', handle:'Demo Account',
+        text:"Features:\n• Posts, media, retweets, and replies archived\n• Reply threads show original post with connecting line\n• Dark/light theme toggle\n• Search and filter tabs\n• Lightbox for images and videos\n• Fully offline — no internet needed to view",
+        date: new Date(Date.now()-7200000).toISOString(), likes:0, retweets:0, replies:0, views:0,
+        is_pinned:false, is_reply:false, is_retweet:false, retweeted_by:'',
+        reply_to_handles:[], parent_tweet:null, media:[] }
+    ]
+  };
+  allTweets = DEMO.tweets;
+  const p = DEMO.profile;
+  document.getElementById('hdr-name').textContent     = p.username;
+  document.getElementById('hdr-count').textContent    = `${allTweets.length} posts`;
+  document.getElementById('profile-name').textContent  = p.username;
+  document.getElementById('profile-handle').textContent = `@${p.handle}`;
+  document.getElementById('stat-tweets').textContent  = allTweets.length;
+  document.getElementById('stat-likes').textContent   = '0';
+  document.getElementById('stat-media').textContent   = '0';
+  document.getElementById('archive-info').innerHTML   = `
+    <div class="info-row"><span>Mode</span><span>Demo</span></div>
+    <div class="info-row"><span>Info</span><span>Run archiver.py</span></div>
+  `;
+  renderFeed();
+}
+
+// ── Filters ────────────────────────────────────────────────────────────────
+function filterTab(tab, el) {
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderFeed();
+}
+function filterSearch(q) {
+  searchQuery = q;
+  renderFeed();
+}
+
+// ── Lightbox ───────────────────────────────────────────────────────────────
+function openLightbox(src, type, e) {
+  if (e) e.stopPropagation();
+  const lb      = document.getElementById('lightbox');
+  const content = document.getElementById('lightbox-content');
+  content.innerHTML = '';
+  if (type === 'video') {
+    const vid = document.createElement('video');
+    vid.src = src;
+    vid.controls = true;
+    vid.style.cssText = 'max-width:90vw;max-height:90vh';
+    content.appendChild(vid);
+    vid.play().catch(() => {});
+  } else {
+    const img = document.createElement('img');
+    img.src = src;
+    img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain';
+    content.appendChild(img);
+  }
+  lb.classList.add('open');
+}
+function closeLightbox(e) {
+  if (e && e.target !== document.getElementById('lightbox') &&
+      !e.target.classList.contains('lightbox-close')) return;
+  const content = document.getElementById('lightbox-content');
+  const vid = content.querySelector('video');
+  if (vid) vid.pause();
+  document.getElementById('lightbox').classList.remove('open');
+  content.innerHTML = '';
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const content = document.getElementById('lightbox-content');
+    const vid = content.querySelector('video');
+    if (vid) vid.pause();
+    document.getElementById('lightbox').classList.remove('open');
+    content.innerHTML = '';
+  }
+});
+
+// ── Theme ──────────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement;
+  html.dataset.theme = html.dataset.theme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('theme', html.dataset.theme);
+}
+(function initTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved) document.documentElement.dataset.theme = saved;
+})();
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+loadArchive();
+</script>
+</body>
+</html>
