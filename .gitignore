@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Credentials / sensitive data
+cookies.txt
+
+# IDE
+.idea/
+
+# Claude Code
+.claude
+
+# Local contributor instructions
+AGENTS.md
+
+#images
+twitter_archive/
+*.json
+/security_best_practices_report.md
