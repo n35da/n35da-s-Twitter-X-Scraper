@@ -46,7 +46,7 @@ Twitter rate-limits unauthenticated scraping heavily. Cookies let gallery-dl scr
 1. Log into x.com in Chrome or Firefox
 2. Install the **"Get cookies.txt LOCALLY"** extension:
    - [Chrome Web Store](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
-   - [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/get-cookies-txt-locally//)
+   - [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/get-cookies-txt-locally/)
 3. Navigate to x.com, click the extension icon, choose **Export**, then save as `cookies.txt`
 4. In the GUI, click **Browse cookies.txt…** and select the file
    or on the command line: `--cookies cookies.txt`
